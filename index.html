@@ -82,6 +82,51 @@
   header .backbtn:hover{ background:#3a3a4e; }
   header .backbtn:disabled{ opacity:.3; cursor:default; }
 
+  .searchbox{
+    position:relative;
+    width:200px;
+  }
+  .searchbox input{
+    width:100%;
+    font-family:var(--mono);
+    font-size:.85em;
+    background:#0e0e16;
+    border:1px solid var(--line);
+    color:var(--ink);
+    border-radius:4px;
+    padding:.45em .6em;
+    outline:none;
+  }
+  .searchbox input:focus{ border-color:var(--accent); }
+  .suggestions{
+    position:absolute;
+    top:110%;
+    left:0;
+    right:0;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    max-height:240px;
+    overflow-y:auto;
+    z-index:10;
+    display:none;
+  }
+  .suggestions.show{ display:block; }
+  .suggestions .sug-item{
+    padding:.5em .6em;
+    font-family:var(--mono);
+    font-size:.8em;
+    cursor:pointer;
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    gap:.4em;
+    border-bottom:1px solid var(--line);
+  }
+  .suggestions .sug-item:last-child{ border-bottom:none; }
+  .suggestions .sug-item:hover{ background:var(--line); }
+  .suggestions .sug-item .icon{ color:var(--folder); }
+
   main{
     flex:1;
     overflow-y:auto;
@@ -176,6 +221,10 @@
   <div class="title">WIKI<span>-FILES</span></div>
   <button class="backbtn" id="backBtn" onclick="goBack()" disabled>&larr; back</button>
   <div class="pathbar" id="pathbar"></div>
+  <div class="searchbox">
+    <input type="text" id="searchInput" placeholder="search wikipedia..." autocomplete="off">
+    <div class="suggestions" id="suggestions"></div>
+  </div>
 </header>
 
 <main id="main"></main>
@@ -363,6 +412,67 @@ async function render() {
 }
 
 render();
+
+// --- Search ---
+const searchInput = document.getElementById('searchInput');
+const suggestions = document.getElementById('suggestions');
+let searchTimeout = null;
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim();
+  clearTimeout(searchTimeout);
+  if (!q) {
+    suggestions.classList.remove('show');
+    suggestions.innerHTML = '';
+    return;
+  }
+  searchTimeout = setTimeout(() => doSearch(q), 250);
+});
+
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const first = suggestions.querySelector('.sug-item');
+    if (first) first.click();
+  }
+  if (e.key === 'Escape') {
+    suggestions.classList.remove('show');
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.searchbox')) {
+    suggestions.classList.remove('show');
+  }
+});
+
+async function doSearch(query) {
+  try {
+    const res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&origin=*&srlimit=8&srsearch=' + encodeURIComponent(query));
+    const data = await res.json();
+    const results = data.query.search || [];
+    suggestions.innerHTML = '';
+    if (results.length === 0) {
+      suggestions.innerHTML = '<div class="sug-item" style="cursor:default;color:var(--dim)">no results</div>';
+    } else {
+      results.forEach(r => {
+        const item = document.createElement('div');
+        item.className = 'sug-item';
+        item.innerHTML = '<span class="icon">📁</span><span>' + r.title + '</span>';
+        item.onclick = () => {
+          history.push(r.title);
+          render();
+          searchInput.value = '';
+          suggestions.classList.remove('show');
+        };
+        suggestions.appendChild(item);
+      });
+    }
+    suggestions.classList.add('show');
+  } catch (err) {
+    suggestions.innerHTML = '<div class="sug-item" style="cursor:default;color:#ff8a8a">search failed</div>';
+    suggestions.classList.add('show');
+  }
+}
 </script>
 
 </body>
